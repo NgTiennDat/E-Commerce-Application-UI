@@ -6,7 +6,8 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
 
-    const backendResponse = await fetch(`${AUTH_API_BASE}/auth/register`, {
+    // Updated to target the user registration endpoint exposed by the backend
+    const backendResponse = await fetch(`${AUTH_API_BASE}/user/register`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -28,15 +29,25 @@ export async function POST(request: NextRequest) {
 
     const data = backendJson?.data
 
-    if (!data?.accessToken || !data?.user) {
+    // Backend returns { userId, username, email, roles, accessToken }
+    if (!data?.accessToken) {
       return NextResponse.json({ message: "Unexpected registration response" }, { status: 500 })
     }
 
+    const user = data?.user
+      ? data.user
+      : {
+          id: data.userId,
+          username: data.username,
+          email: data.email,
+          roles: data.roles ?? [],
+        }
+
     return NextResponse.json({
       token: data.accessToken,
-      refreshToken: data.refreshToken,
-      tokenType: data.tokenType,
-      user: data.user,
+      refreshToken: data.refreshToken ?? null,
+      tokenType: data.tokenType ?? "Bearer",
+      user,
     })
   } catch (error) {
     return NextResponse.json({ message: "An error occurred during registration" }, { status: 500 })

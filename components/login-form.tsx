@@ -148,7 +148,7 @@ export function LoginForm() {
             {errors.password && <p className="text-sm text-destructive">{errors.password}</p>}
           </div>
         </CardContent>
-        <CardFooter className="flex flex-col gap-4">
+        <CardFooter className="flex flex-col gap-4 mt-5">
           <Button type="submit" className="w-full" disabled={isLoading}>
             {isLoading ? (
               <>
