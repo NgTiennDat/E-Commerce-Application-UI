@@ -1,52 +1,48 @@
 import { type NextRequest, NextResponse } from "next/server"
 
-// Simple JWT-like token generation (for demo purposes)
-// In production, use a proper JWT library like 'jose' or 'jsonwebtoken'
-function generateToken(payload: object): string {
-  const header = btoa(JSON.stringify({ alg: "HS256", typ: "JWT" }))
-  const payloadStr = btoa(JSON.stringify({ ...payload, exp: Date.now() + 24 * 60 * 60 * 1000 }))
-  const signature = btoa(JSON.stringify({ signed: true }))
-  return `${header}.${payloadStr}.${signature}`
-}
-
-// Demo users database (replace with real database in production)
-const users = [
-  { id: 1, email: "user@example.com", username: "user", password: "password123", name: "John Doe" },
-  { id: 2, email: "admin@example.com", username: "admin", password: "admin123", name: "Admin User" },
-]
+const AUTH_API_BASE = process.env.AUTH_API_URL ?? "http://localhost:8040/api/v1"
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { emailOrUsername, password } = body
+    const { emailOrUsername, password } = body ?? {}
 
-    // Find user by email or username
-    const user = users.find(
-      (u) =>
-        (u.email.toLowerCase() === emailOrUsername.toLowerCase() ||
-          u.username.toLowerCase() === emailOrUsername.toLowerCase()) &&
-        u.password === password,
-    )
-
-    if (!user) {
-      return NextResponse.json({ message: "Invalid email/username or password" }, { status: 401 })
+    if (!emailOrUsername || !password) {
+      return NextResponse.json({ message: "Email/username and password are required" }, { status: 400 })
     }
 
-    // Generate JWT token
-    const token = generateToken({
-      userId: user.id,
-      email: user.email,
-      username: user.username,
+    const backendResponse = await fetch(`${AUTH_API_BASE}/auth/doLogin`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      // Backend expects "usernameOrEmail"
+      body: JSON.stringify({ usernameOrEmail: emailOrUsername, password }),
+      cache: "no-store",
     })
 
+    const backendJson = await backendResponse.json().catch(() => null)
+
+    if (!backendResponse.ok) {
+      const message =
+        backendJson?.message ||
+        backendJson?.meta?.message ||
+        backendJson?.error ||
+        "Invalid email/username or password"
+      return NextResponse.json({ message }, { status: backendResponse.status })
+    }
+
+    const data = backendJson?.data
+
+    if (!data?.accessToken || !data?.user) {
+      return NextResponse.json({ message: "Unexpected authentication response" }, { status: 500 })
+    }
+
     return NextResponse.json({
-      token,
-      user: {
-        id: user.id,
-        email: user.email,
-        username: user.username,
-        name: user.name,
-      },
+      token: data.accessToken,
+      refreshToken: data.refreshToken,
+      tokenType: data.tokenType,
+      user: data.user,
     })
   } catch (error) {
     return NextResponse.json({ message: "An error occurred during authentication" }, { status: 500 })

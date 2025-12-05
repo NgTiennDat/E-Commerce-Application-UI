@@ -80,8 +80,14 @@ export function LoginForm() {
         return
       }
 
-      // Store token in localStorage
+      // Store tokens in localStorage for subsequent requests
       localStorage.setItem("token", data.token)
+      if (data.refreshToken) {
+        localStorage.setItem("refreshToken", data.refreshToken)
+      }
+      if (data.tokenType) {
+        localStorage.setItem("tokenType", data.tokenType)
+      }
       localStorage.setItem("user", JSON.stringify(data.user))
 
       // Redirect to main E-Commerce page
