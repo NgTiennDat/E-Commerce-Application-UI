@@ -4,6 +4,7 @@ import type React from "react"
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
+import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -147,7 +148,7 @@ export function LoginForm() {
             {errors.password && <p className="text-sm text-destructive">{errors.password}</p>}
           </div>
         </CardContent>
-        <CardFooter>
+        <CardFooter className="flex flex-col gap-4">
           <Button type="submit" className="w-full" disabled={isLoading}>
             {isLoading ? (
               <>
@@ -158,6 +159,13 @@ export function LoginForm() {
               "Sign In"
             )}
           </Button>
+
+          <p className="text-sm text-muted-foreground text-center">
+            Don&apos;t have an account?{" "}
+            <Link href="/register" className="text-primary hover:underline">
+              Create one
+            </Link>
+          </p>
         </CardFooter>
       </form>
     </Card>
