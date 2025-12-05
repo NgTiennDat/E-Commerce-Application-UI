@@ -45,6 +45,13 @@ interface Product {
   }
 }
 
+interface ProductMeta {
+  page?: number
+  size?: number
+  pages?: number
+  total?: number
+}
+
 export default function ShopPage() {
   const router = useRouter()
   const [user, setUser] = useState<UserData | null>(null)
@@ -52,7 +59,14 @@ export default function ShopPage() {
   const [products, setProducts] = useState<Product[]>([])
   const [productsLoading, setProductsLoading] = useState(true)
   const [productsError, setProductsError] = useState<string | null>(null)
+  const [meta, setMeta] = useState<ProductMeta>({})
+  const [page, setPage] = useState(0)
+  const [size, setSize] = useState(8)
   const displayName = user?.name || user?.fullName || user?.username || "Customer"
+  const totalPages =
+    meta.pages ??
+    (meta.total && size ? Math.max(1, Math.ceil(meta.total / size)) : undefined)
+  const currentPage = meta.page ?? page
 
   useEffect(() => {
     // Check for valid token
@@ -75,7 +89,8 @@ export default function ShopPage() {
       setProductsLoading(true)
       setProductsError(null)
       try {
-        const response = await fetch("/api/products/all-product", {
+        const query = new URLSearchParams({ page: page.toString(), size: size.toString() }).toString()
+        const response = await fetch(`/api/products/all-product?${query}`, {
           headers: {
             Authorization: `Bearer ${token}`,
           },
@@ -90,6 +105,7 @@ export default function ShopPage() {
         }
 
         setProducts(json.products ?? [])
+        setMeta(json.meta ?? {})
       } catch (error) {
         setProductsError("An error occurred while loading products")
       } finally {
@@ -99,12 +115,18 @@ export default function ShopPage() {
 
     fetchProducts()
     setIsLoading(false)
-  }, [router])
+  }, [router, page, size])
 
   const handleLogout = () => {
     localStorage.removeItem("token")
     localStorage.removeItem("user")
     router.push("/")
+  }
+
+  const goToPage = (newPage: number) => {
+    if (newPage < 0) return
+    if (totalPages !== undefined && newPage >= totalPages) return
+    setPage(newPage)
   }
 
   if (isLoading) {
@@ -151,6 +173,50 @@ export default function ShopPage() {
           </div>
           <div className="text-sm text-muted-foreground">
             {products.length} items
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => goToPage(currentPage - 1)}
+              disabled={productsLoading || currentPage <= 0}
+            >
+              Previous
+            </Button>
+            <div className="text-sm text-muted-foreground">
+              Page {currentPage + 1}
+              {totalPages ? ` of ${totalPages}` : ""}
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => goToPage(currentPage + 1)}
+              disabled={productsLoading || (totalPages !== undefined && currentPage + 1 >= totalPages)}
+            >
+              Next
+            </Button>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">Page size</span>
+            <select
+              className="h-9 rounded-md border bg-background px-2 text-sm"
+              value={size}
+              onChange={(e) => {
+                setSize(Number(e.target.value) || 8)
+                setPage(0)
+              }}
+              disabled={productsLoading}
+            >
+              {[8, 12, 16, 20].map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
 
