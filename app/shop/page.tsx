@@ -7,7 +7,10 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { ShoppingCart, LogOut, User, Star, CheckCircle2, Percent, PackageSearch } from "lucide-react"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Switch } from "@/components/ui/switch"
+import { ShoppingCart, LogOut, User, Star, CheckCircle2, Percent, PackageSearch, Search, SlidersHorizontal, Filter } from "lucide-react"
 
 interface UserData {
   id: number
@@ -50,7 +53,30 @@ interface ProductMeta {
   size?: number
   pages?: number
   total?: number
+  code?: string
 }
+
+type ProductFilters = {
+  keyword: string
+  categoryId: string
+  status: string
+  minPrice: string
+  maxPrice: string
+  brand: string
+  isFeatured: boolean
+  isNew: boolean
+}
+
+const createDefaultFilters = (): ProductFilters => ({
+  keyword: "",
+  categoryId: "",
+  status: "",
+  minPrice: "",
+  maxPrice: "",
+  brand: "",
+  isFeatured: false,
+  isNew: false,
+})
 
 export default function ShopPage() {
   const router = useRouter()
@@ -60,13 +86,19 @@ export default function ShopPage() {
   const [productsLoading, setProductsLoading] = useState(true)
   const [productsError, setProductsError] = useState<string | null>(null)
   const [meta, setMeta] = useState<ProductMeta>({})
+  const [filters, setFilters] = useState<ProductFilters>(createDefaultFilters())
+  const [appliedFilters, setAppliedFilters] = useState<ProductFilters>(createDefaultFilters())
   const [page, setPage] = useState(0)
-  const [size, setSize] = useState(8)
+  const [size, setSize] = useState(12)
   const displayName = user?.name || user?.fullName || user?.username || "Customer"
+  const totalItems = meta.total !== undefined ? Number(meta.total) : products.length
   const totalPages =
-    meta.pages ??
-    (meta.total && size ? Math.max(1, Math.ceil(meta.total / size)) : undefined)
-  const currentPage = meta.page ?? page
+    meta.pages !== undefined
+      ? Number(meta.pages)
+      : totalItems && size
+        ? Math.max(1, Math.ceil(totalItems / size))
+        : undefined
+  const currentPage = meta.page !== undefined ? Number(meta.page) : page
 
   useEffect(() => {
     // Check for valid token
@@ -89,7 +121,28 @@ export default function ShopPage() {
       setProductsLoading(true)
       setProductsError(null)
       try {
-        const query = new URLSearchParams({ page: page.toString(), size: size.toString() }).toString()
+        const queryParams = new URLSearchParams({
+          page: page.toString(),
+          size: size.toString(),
+        })
+
+        const addIfPresent = (key: string, value?: string | boolean) => {
+          if (value === undefined || value === null) return
+          if (typeof value === "string" && value.trim() === "") return
+          queryParams.append(key, String(value))
+        }
+
+        addIfPresent("keyword", appliedFilters.keyword.trim())
+        addIfPresent("categoryId", appliedFilters.categoryId.trim())
+        addIfPresent("status", appliedFilters.status)
+        addIfPresent("minPrice", appliedFilters.minPrice.trim())
+        addIfPresent("maxPrice", appliedFilters.maxPrice.trim())
+        addIfPresent("brand", appliedFilters.brand.trim())
+        if (appliedFilters.isFeatured) addIfPresent("isFeatured", true)
+        if (appliedFilters.isNew) addIfPresent("isNew", true)
+
+        const query = queryParams.toString()
+
         const response = await fetch(`/api/products/all-product?${query}`, {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -115,7 +168,7 @@ export default function ShopPage() {
 
     fetchProducts()
     setIsLoading(false)
-  }, [router, page, size])
+  }, [router, page, size, appliedFilters])
 
   const handleLogout = () => {
     localStorage.removeItem("token")
@@ -127,6 +180,18 @@ export default function ShopPage() {
     if (newPage < 0) return
     if (totalPages !== undefined && newPage >= totalPages) return
     setPage(newPage)
+  }
+
+  const applyFilters = () => {
+    setPage(0)
+    setAppliedFilters({ ...filters })
+  }
+
+  const resetFilters = () => {
+    const cleared = createDefaultFilters()
+    setFilters(cleared)
+    setAppliedFilters(cleared)
+    setPage(0)
   }
 
   if (isLoading) {
@@ -163,18 +228,148 @@ export default function ShopPage() {
       </header>
 
       {/* Main Content */}
-      <main className="container mx-auto px-4 py-8 space-y-4">
-        <div className="flex items-center justify-between">
-          <div>
+      <main className="container mx-auto px-4 py-8 space-y-6">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div className="space-y-1">
+            <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-primary">
+              <SlidersHorizontal className="h-4 w-4" />
+              Live catalog
+            </p>
             <h2 className="text-2xl font-bold">Products</h2>
             <p className="text-sm text-muted-foreground">
               Browse the latest inventory fetched from the product service
             </p>
           </div>
-          <div className="text-sm text-muted-foreground">
-            {products.length} items
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <div className="rounded-full border bg-background px-3 py-2">
+              {totalItems} items
+            </div>
+            <div className="rounded-full border bg-background px-3 py-2">
+              Page {currentPage + 1}
+              {totalPages ? ` / ${totalPages}` : ""}
+            </div>
           </div>
         </div>
+
+        <Card className="border-primary/10 shadow-sm">
+          <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between pb-2">
+            <div className="space-y-1">
+              <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-primary">
+                <Filter className="h-4 w-4" />
+                Filters
+              </p>
+              <CardTitle className="text-lg">Search & refine products</CardTitle>
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={resetFilters} disabled={productsLoading}>
+                Reset
+              </Button>
+              <Button size="sm" onClick={applyFilters} disabled={productsLoading}>
+                Apply filters
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            <div className="space-y-2">
+              <Label htmlFor="keyword">Keyword</Label>
+              <div className="relative">
+                <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  id="keyword"
+                  placeholder="Search by name or description"
+                  className="pl-9"
+                  value={filters.keyword}
+                  onChange={(e) => setFilters({ ...filters, keyword: e.target.value })}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      applyFilters()
+                    }
+                  }}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="brand">Brand</Label>
+              <Input
+                id="brand"
+                placeholder="e.g. Generic"
+                value={filters.brand}
+                onChange={(e) => setFilters({ ...filters, brand: e.target.value })}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="category">Category</Label>
+              <Input
+                id="category"
+                placeholder="Category"
+                value={filters.categoryId}
+                onChange={(e) => setFilters({ ...filters, categoryId: e.target.value })}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="status">Status</Label>
+              <select
+                id="status"
+                className="h-10 rounded-md border bg-background px-3 text-sm"
+                value={filters.status}
+                onChange={(e) => setFilters({ ...filters, status: e.target.value })}
+              >
+                <option value="">Any</option>
+                <option value="ACTIVE">Active</option>
+                <option value="INACTIVE">Inactive</option>
+              </select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="minPrice">Min price</Label>
+              <Input
+                id="minPrice"
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder="0.00"
+                value={filters.minPrice}
+                onChange={(e) => setFilters({ ...filters, minPrice: e.target.value })}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="maxPrice">Max price</Label>
+              <Input
+                id="maxPrice"
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder="1000.00"
+                value={filters.maxPrice}
+                onChange={(e) => setFilters({ ...filters, maxPrice: e.target.value })}
+              />
+            </div>
+
+            <div className="flex items-center justify-between rounded-lg border p-3">
+              <div className="space-y-1">
+                <Label htmlFor="featured">Featured</Label>
+                <p className="text-xs text-muted-foreground">Only show featured picks</p>
+              </div>
+              <Switch
+                id="featured"
+                checked={filters.isFeatured}
+                onCheckedChange={(checked) => setFilters({ ...filters, isFeatured: checked })}
+              />
+            </div>
+
+            <div className="flex items-center justify-between rounded-lg border p-3">
+              <div className="space-y-1">
+                <Label htmlFor="new">New arrivals</Label>
+                <p className="text-xs text-muted-foreground">Highlight fresh inventory</p>
+              </div>
+              <Switch id="new" checked={filters.isNew} onCheckedChange={(checked) => setFilters({ ...filters, isNew: checked })} />
+            </div>
+          </CardContent>
+        </Card>
 
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2">
@@ -206,12 +401,12 @@ export default function ShopPage() {
               className="h-9 rounded-md border bg-background px-2 text-sm"
               value={size}
               onChange={(e) => {
-                setSize(Number(e.target.value) || 8)
+                setSize(Number(e.target.value) || 12)
                 setPage(0)
               }}
               disabled={productsLoading}
             >
-              {[8, 12, 16, 20].map((option) => (
+              {[8, 12, 13, 16, 20].map((option) => (
                 <option key={option} value={option}>
                   {option}
                 </option>
@@ -227,15 +422,22 @@ export default function ShopPage() {
         )}
 
         {productsLoading ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {Array.from({ length: 4 }).map((_, idx) => (
-              <Card key={idx} className="h-64 animate-pulse" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            {Array.from({ length: 8 }).map((_, idx) => (
+              <Card key={idx} className="overflow-hidden">
+                <div className="h-48 w-full animate-pulse bg-muted" />
+                <CardContent className="space-y-3 p-4">
+                  <div className="h-4 w-3/4 animate-pulse rounded bg-muted" />
+                  <div className="h-3 w-full animate-pulse rounded bg-muted" />
+                  <div className="h-3 w-1/2 animate-pulse rounded bg-muted" />
+                </CardContent>
+              </Card>
             ))}
           </div>
         ) : products.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-3 py-16 text-muted-foreground">
             <PackageSearch className="h-10 w-10" />
-            <p>No products available.</p>
+            <p>No products found for the current filters.</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
@@ -251,9 +453,14 @@ export default function ShopPage() {
                 <CardContent className="p-4 space-y-3 flex-1">
                   <div className="flex items-center justify-between gap-2">
                     <CardTitle className="text-lg line-clamp-2">{product.name}</CardTitle>
-                    {product.isNew && <Badge>New</Badge>}
+                    <div className="flex gap-1">
+                      {product.isNew && <Badge>New</Badge>}
+                      {product.isFeatured && <Badge variant="secondary">Featured</Badge>}
+                    </div>
                   </div>
-                  <p className="text-sm text-muted-foreground line-clamp-2">{product.shortDescription}</p>
+                  <p className="text-sm text-muted-foreground line-clamp-2">
+                    {product.shortDescription || product.description || "No description provided."}
+                  </p>
                   <div className="flex items-center gap-2">
                     <span className="text-xl font-bold text-primary">
                       ${product.finalPrice.toFixed(2)}
@@ -271,12 +478,30 @@ export default function ShopPage() {
                   <div className="flex items-center justify-between text-sm text-muted-foreground">
                     <div className="flex items-center gap-1">
                       <Star className="h-4 w-4 text-yellow-500" />
-                      <span>{product.rating ?? "—"}</span>
+                      <span>
+                        {product.rating !== undefined && product.rating !== null ? product.rating.toFixed(1) : "N/A"}
+                      </span>
                       {product.ratingCount ? <span>({product.ratingCount})</span> : null}
                     </div>
                     <div className="flex items-center gap-1">
                       <CheckCircle2 className={`h-4 w-4 ${product.inStock ? "text-green-500" : "text-destructive"}`} />
                       <span>{product.inStock ? "In stock" : "Out of stock"}</span>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+                    <div className="flex items-center gap-1">
+                      <span className="font-semibold text-foreground">SKU:</span>
+                      <span>{product.sku}</span>
+                    </div>
+                    {product.brand && (
+                      <div className="flex items-center gap-1">
+                        <span className="font-semibold text-foreground">Brand:</span>
+                        <span>{product.brand}</span>
+                      </div>
+                    )}
+                    <div className="flex items-center gap-1">
+                      <span className="font-semibold text-foreground">Qty:</span>
+                      <span>{product.availableQuantity}</span>
                     </div>
                   </div>
                   {product.category?.name && (
