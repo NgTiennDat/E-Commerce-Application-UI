@@ -10,7 +10,7 @@ export async function GET(request: NextRequest) {
     const page = searchParams.get("page") ?? "0"
     const size = searchParams.get("size") ?? "12"
     const keyword = searchParams.get("keyword")
-    const categoryId = searchParams.get("categoryId")
+    const categoryName = searchParams.get("categoryName")
     const status = searchParams.get("status")
     const minPrice = searchParams.get("minPrice")
     const maxPrice = searchParams.get("maxPrice")
@@ -30,7 +30,7 @@ export async function GET(request: NextRequest) {
     }
 
     appendIfPresent("keyword", keyword)
-    appendIfPresent("categoryId", categoryId)
+    appendIfPresent("categoryName", categoryName)
     appendIfPresent("status", status)
     appendIfPresent("minPrice", minPrice)
     appendIfPresent("maxPrice", maxPrice)

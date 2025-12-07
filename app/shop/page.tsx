@@ -37,6 +37,7 @@ interface Product {
   ratingCount?: number
   isFeatured?: boolean
   isNew?: boolean
+  status?: string
   category?: {
     id: number
     name: string
@@ -58,7 +59,7 @@ interface ProductMeta {
 
 type ProductFilters = {
   keyword: string
-  categoryId: string
+  categoryName: string
   status: string
   minPrice: string
   maxPrice: string
@@ -69,7 +70,7 @@ type ProductFilters = {
 
 const createDefaultFilters = (): ProductFilters => ({
   keyword: "",
-  categoryId: "",
+  categoryName: "",
   status: "",
   minPrice: "",
   maxPrice: "",
@@ -85,6 +86,10 @@ export default function ShopPage() {
   const [products, setProducts] = useState<Product[]>([])
   const [productsLoading, setProductsLoading] = useState(true)
   const [productsError, setProductsError] = useState<string | null>(null)
+  const [relatedProducts, setRelatedProducts] = useState<Product[]>([])
+  const [relatedLoading, setRelatedLoading] = useState(false)
+  const [relatedError, setRelatedError] = useState<string | null>(null)
+  const [relatedFor, setRelatedFor] = useState<Product | null>(null)
   const [meta, setMeta] = useState<ProductMeta>({})
   const [filters, setFilters] = useState<ProductFilters>(createDefaultFilters())
   const [appliedFilters, setAppliedFilters] = useState<ProductFilters>(createDefaultFilters())
@@ -133,7 +138,7 @@ export default function ShopPage() {
         }
 
         addIfPresent("keyword", appliedFilters.keyword.trim())
-        addIfPresent("categoryId", appliedFilters.categoryId.trim())
+        addIfPresent("categoryName", appliedFilters.categoryName.trim())
         addIfPresent("status", appliedFilters.status)
         addIfPresent("minPrice", appliedFilters.minPrice.trim())
         addIfPresent("maxPrice", appliedFilters.maxPrice.trim())
@@ -194,6 +199,41 @@ export default function ShopPage() {
     setPage(0)
   }
 
+  const fetchRelatedProducts = async (product: Product) => {
+    const token = localStorage.getItem("token")
+    if (!token) {
+      setRelatedError("Missing auth token")
+      return
+    }
+
+    setRelatedFor(product)
+    setRelatedLoading(true)
+    setRelatedError(null)
+    try {
+      const response = await fetch(`/api/products/${product.id}/related`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        cache: "no-store",
+      })
+
+      const json = await response.json()
+
+      if (!response.ok) {
+        setRelatedProducts([])
+        setRelatedError(json?.message || "Failed to load related products")
+        return
+      }
+
+      setRelatedProducts(json.products ?? json.data ?? [])
+    } catch (error) {
+      setRelatedProducts([])
+      setRelatedError("An error occurred while loading related products")
+    } finally {
+      setRelatedLoading(false)
+    }
+  }
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -236,9 +276,6 @@ export default function ShopPage() {
               Live catalog
             </p>
             <h2 className="text-2xl font-bold">Products</h2>
-            <p className="text-sm text-muted-foreground">
-              Browse the latest inventory fetched from the product service
-            </p>
           </div>
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <div className="rounded-full border bg-background px-3 py-2">
@@ -258,7 +295,7 @@ export default function ShopPage() {
                 <Filter className="h-4 w-4" />
                 Filters
               </p>
-              <CardTitle className="text-lg">Search & refine products</CardTitle>
+              <CardTitle className="text-lg">Search & Refine Products</CardTitle>
             </div>
             <div className="flex gap-2">
               <Button variant="outline" size="sm" onClick={resetFilters} disabled={productsLoading}>
@@ -300,12 +337,12 @@ export default function ShopPage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="category">Category</Label>
+              <Label htmlFor="categoryName">Category</Label>
               <Input
-                id="category"
-                placeholder="Category"
-                value={filters.categoryId}
-                onChange={(e) => setFilters({ ...filters, categoryId: e.target.value })}
+                id="categoryName"
+                placeholder="Category name"
+                value={filters.categoryName}
+                onChange={(e) => setFilters({ ...filters, categoryName: e.target.value })}
               />
             </div>
 
@@ -511,14 +548,138 @@ export default function ShopPage() {
                   )}
                 </CardContent>
                 <CardFooter className="p-4 pt-0">
-                  <Button className="w-full" disabled={!product.inStock}>
-                    <ShoppingCart className="h-4 w-4 mr-2" />
-                    Add to Cart
-                  </Button>
+                  <div className="flex gap-2 w-full">
+                    <Button
+                      variant="outline"
+                      className="flex-1"
+                      onClick={() => fetchRelatedProducts(product)}
+                      disabled={productsLoading}
+                    >
+                      Related
+                    </Button>
+                    <Button className="flex-1" disabled={!product.inStock}>
+                      <ShoppingCart className="h-4 w-4 mr-2" />
+                      Add to Cart
+                    </Button>
+                  </div>
                 </CardFooter>
               </Card>
             ))}
           </div>
+        )}
+
+        {relatedFor && (
+          <Card className="border-primary/10 shadow-sm">
+            <CardHeader className="pb-2">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">
+                    Related products
+                  </p>
+                  <CardTitle className="text-lg">
+                    For {relatedFor.name}
+                  </CardTitle>
+                </div>
+                <Badge variant="secondary">Category: {relatedFor.category?.name ?? "N/A"}</Badge>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {relatedLoading ? (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary" />
+                  Loading related products...
+                </div>
+              ) : relatedError ? (
+                <Alert variant="destructive">
+                  <AlertDescription>{relatedError}</AlertDescription>
+                </Alert>
+              ) : relatedProducts.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No related products found.</p>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                  {relatedProducts.map((product) => (
+                    <Card key={`related-${product.id}`} className="overflow-hidden flex flex-col">
+                      <CardHeader className="p-0">
+                        <img
+                          src={product.imageUrl || "/placeholder.svg"}
+                          alt={product.name}
+                          className="w-full h-40 object-cover"
+                        />
+                      </CardHeader>
+                      <CardContent className="p-4 space-y-3 flex-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <CardTitle className="text-base line-clamp-2">{product.name}</CardTitle>
+                          <div className="flex gap-1">
+                            {product.isNew && <Badge>New</Badge>}
+                            {product.isFeatured && <Badge variant="secondary">Featured</Badge>}
+                          </div>
+                        </div>
+                        <p className="text-sm text-muted-foreground line-clamp-2">
+                          {product.shortDescription || product.description || "No description provided."}
+                        </p>
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg font-bold text-primary">
+                            ${product.finalPrice.toFixed(2)}
+                          </span>
+                          {product.discountPercent > 0 && (
+                            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                              <Percent className="h-4 w-4" />
+                              <span className="line-through">${product.price.toFixed(2)}</span>
+                              <Badge variant="secondary" className="ml-1">
+                                -{product.discountPercent}%
+                              </Badge>
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex items-center justify-between text-xs text-muted-foreground">
+                          <div className="flex items-center gap-1">
+                            <Star className="h-4 w-4 text-yellow-500" />
+                            <span>
+                              {product.rating !== undefined && product.rating !== null ? product.rating.toFixed(1) : "N/A"}
+                            </span>
+                            {product.ratingCount ? <span>({product.ratingCount})</span> : null}
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <CheckCircle2 className={`h-4 w-4 ${product.inStock ? "text-green-500" : "text-destructive"}`} />
+                            <span>{product.inStock ? "In stock" : "Out of stock"}</span>
+                          </div>
+                        </div>
+                        <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+                          <div className="flex items-center gap-1">
+                            <span className="font-semibold text-foreground">SKU:</span>
+                            <span>{product.sku}</span>
+                          </div>
+                          {product.brand && (
+                            <div className="flex items-center gap-1">
+                              <span className="font-semibold text-foreground">Brand:</span>
+                              <span>{product.brand}</span>
+                            </div>
+                          )}
+                          <div className="flex items-center gap-1">
+                            <span className="font-semibold text-foreground">Qty:</span>
+                            <span>{product.availableQuantity}</span>
+                          </div>
+                        </div>
+                        {product.category?.name && (
+                          <Badge variant="outline" className="w-fit">
+                            {product.category.name}
+                          </Badge>
+                        )}
+                      </CardContent>
+                      <CardFooter className="p-4 pt-0">
+                        <div className="flex gap-2 w-full">
+                          <Button className="flex-1" disabled={!product.inStock}>
+                            <ShoppingCart className="h-4 w-4 mr-2" />
+                            Add to Cart
+                          </Button>
+                        </div>
+                      </CardFooter>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
         )}
       </main>
     </div>
