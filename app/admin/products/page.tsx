@@ -933,6 +933,11 @@ export default function ProductAdminPage() {
                   {products.map((product) => {
                     const isRowLoading = rowActionLoadingId === product.id
                     const nextStatus = product.status === "ACTIVE" ? "INACTIVE" : "ACTIVE"
+                    const derivedInStock =
+                      product.inStock !== undefined && product.inStock !== null
+                        ? product.inStock
+                        : product.availableQuantity > 0
+                    const statusLabel = product.status ?? (derivedInStock ? "ACTIVE" : "INACTIVE")
                     return (
                       <TableRow key={product.id ?? product.sku}>
                         <TableCell>
@@ -964,10 +969,10 @@ export default function ProductAdminPage() {
                         <TableCell>
                           <div className="flex flex-col gap-1 text-xs">
                             <Badge variant="outline" className="w-fit">
-                              {product.status ?? "N/A"}
+                              {statusLabel}
                             </Badge>
                             <div className="flex items-center gap-1 text-muted-foreground">
-                              {product.inStock ? (
+                              {derivedInStock ? (
                                 <>
                                   <CheckCircle2 className="h-4 w-4 text-green-500" />
                                   In stock
