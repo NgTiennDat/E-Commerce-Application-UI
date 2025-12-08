@@ -52,6 +52,20 @@ export function LoginForm() {
     return Object.keys(newErrors).length === 0
   }
 
+  const normalizeRole = (role: string) => String(role).toUpperCase().replace(/^ROLE_/, "")
+
+  const decodeRolesFromToken = (token: string): string[] => {
+    try {
+      const [, payload] = token.split(".")
+      if (!payload) return []
+      const decoded = atob(payload.replace(/-/g, "+").replace(/_/g, "/"))
+      const json = JSON.parse(decoded)
+      return Array.isArray(json?.roles) ? json.roles : []
+    } catch {
+      return []
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setErrors({})
@@ -89,10 +103,29 @@ export function LoginForm() {
       if (data.tokenType) {
         localStorage.setItem("tokenType", data.tokenType)
       }
-      localStorage.setItem("user", JSON.stringify(data.user))
 
-      // Redirect to main E-Commerce page
-      router.push("/shop")
+      // Roles can be on the user object or top-level; normalize to array of upper-case strings
+      const rolesFromResponse: string[] = Array.isArray(data?.user?.roles)
+        ? data.user.roles
+        : Array.isArray(data?.roles)
+          ? data.roles
+          : []
+      const roles = rolesFromResponse.length > 0 ? rolesFromResponse : decodeRolesFromToken(data.token || "")
+      const normalizedRoles = roles.map(normalizeRole)
+
+      localStorage.setItem(
+        "user",
+        JSON.stringify({
+          ...data.user,
+          roles: normalizedRoles,
+        }),
+      )
+
+      // Route based on role
+      const adminLikeRoles = ["ADMIN", "SELLER", "STAFF_SUPPORT", "INVENTORY_MANAGER", "DELIVERY_MANAGER", "PAYMENT_MANAGER"]
+      const isAdmin = normalizedRoles.some((role) => adminLikeRoles.includes(role))
+
+      router.push(isAdmin ? "/admin/products" : "/shop")
     } catch (error) {
       setErrors({ general: "An error occurred. Please try again later." })
     } finally {

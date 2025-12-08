@@ -18,6 +18,7 @@ interface UserData {
   username: string
   name?: string
   fullName?: string
+  roles?: string[]
 }
 
 interface Product {
@@ -96,6 +97,14 @@ export default function ShopPage() {
   const [page, setPage] = useState(0)
   const [size, setSize] = useState(12)
   const displayName = user?.name || user?.fullName || user?.username || "Customer"
+  const normalizedRoles = user?.roles?.map((role) => String(role).toUpperCase().replace(/^ROLE_/, "")) ?? []
+  const isAdmin =
+    normalizedRoles.includes("ADMIN") ||
+    normalizedRoles.includes("SELLER") ||
+    normalizedRoles.includes("STAFF_SUPPORT") ||
+    normalizedRoles.includes("INVENTORY_MANAGER") ||
+    normalizedRoles.includes("DELIVERY_MANAGER") ||
+    normalizedRoles.includes("PAYMENT_MANAGER")
   const totalItems = meta.total !== undefined ? Number(meta.total) : products.length
   const totalPages =
     meta.pages !== undefined
@@ -259,6 +268,11 @@ export default function ShopPage() {
             <Button variant="secondary" size="sm" asChild>
               <Link href="/profile">Profile</Link>
             </Button>
+            {isAdmin && (
+              <Button variant="outline" size="sm" asChild>
+                <Link href="/admin/products">Admin</Link>
+              </Button>
+            )}
             <Button variant="outline" size="sm" onClick={handleLogout}>
               <LogOut className="h-4 w-4 mr-2" />
               Logout
