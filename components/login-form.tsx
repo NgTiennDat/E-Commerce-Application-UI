@@ -11,6 +11,8 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Loader2, AlertCircle, ShoppingBag } from "lucide-react"
+import { hasAdminAccess } from "@/lib/auth-session"
+import { persistAuthSession } from "@/lib/client-auth"
 
 export function LoginForm() {
   const router = useRouter()
@@ -52,20 +54,6 @@ export function LoginForm() {
     return Object.keys(newErrors).length === 0
   }
 
-  const normalizeRole = (role: string) => String(role).toUpperCase().replace(/^ROLE_/, "")
-
-  const decodeRolesFromToken = (token: string): string[] => {
-    try {
-      const [, payload] = token.split(".")
-      if (!payload) return []
-      const decoded = atob(payload.replace(/-/g, "+").replace(/_/g, "/"))
-      const json = JSON.parse(decoded)
-      return Array.isArray(json?.roles) ? json.roles : []
-    } catch {
-      return []
-    }
-  }
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setErrors({})
@@ -95,35 +83,8 @@ export function LoginForm() {
         return
       }
 
-      // Store tokens in localStorage for subsequent requests
-      localStorage.setItem("token", data.token)
-      if (data.refreshToken) {
-        localStorage.setItem("refreshToken", data.refreshToken)
-      }
-      if (data.tokenType) {
-        localStorage.setItem("tokenType", data.tokenType)
-      }
-
-      // Roles can be on the user object or top-level; normalize to array of upper-case strings
-      const rolesFromResponse: string[] = Array.isArray(data?.user?.roles)
-        ? data.user.roles
-        : Array.isArray(data?.roles)
-          ? data.roles
-          : []
-      const roles = rolesFromResponse.length > 0 ? rolesFromResponse : decodeRolesFromToken(data.token || "")
-      const normalizedRoles = roles.map(normalizeRole)
-
-      localStorage.setItem(
-        "user",
-        JSON.stringify({
-          ...data.user,
-          roles: normalizedRoles,
-        }),
-      )
-
-      // Route based on role
-      const adminLikeRoles = ["ADMIN", "SELLER", "STAFF_SUPPORT", "INVENTORY_MANAGER", "DELIVERY_MANAGER", "PAYMENT_MANAGER"]
-      const isAdmin = normalizedRoles.some((role) => adminLikeRoles.includes(role))
+      const normalizedRoles = persistAuthSession(data)
+      const isAdmin = hasAdminAccess(normalizedRoles)
 
       router.push(isAdmin ? "/admin/products" : "/shop")
     } catch (error) {

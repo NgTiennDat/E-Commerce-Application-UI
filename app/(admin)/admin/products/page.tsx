@@ -27,6 +27,8 @@ import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Textarea } from "@/components/ui/textarea"
+import { hasAdminAccess } from "@/lib/auth-session"
+import { clearAuthSession, readStoredUser } from "@/lib/client-auth"
 
 type Product = {
   id?: number
@@ -107,21 +109,6 @@ const defaultFilters: ProductFilters = {
   brand: "",
   isFeatured: false,
   isNew: false,
-}
-
-const ADMIN_ROLES = ["ADMIN"]
-const normalizeRole = (role: string) => String(role).toUpperCase().replace(/^ROLE_/, "")
-
-const parseStoredUser = (storedUser: string | null): UserInfo | null => {
-  if (!storedUser) return null
-
-  try {
-    const parsed = JSON.parse(storedUser)
-    const roles: string[] = Array.isArray(parsed?.roles) ? parsed.roles.map(normalizeRole) : []
-    return { ...parsed, roles }
-  } catch {
-    return null
-  }
 }
 
 const validateProductForm = (state: ProductFormState) => {
@@ -213,9 +200,7 @@ export default function ProductAdminPage() {
   const [rowActionError, setRowActionError] = useState<string | null>(null)
 
   const displayName = user?.fullName || user?.username || "Admin"
-  const isAdmin = Boolean(
-    user?.roles?.some((role) => ADMIN_ROLES.includes(normalizeRole(role))),
-  )
+  const isAdmin = hasAdminAccess(user?.roles)
   const totalItems = meta.total !== undefined ? Number(meta.total) : products.length
   const totalPages =
     meta.pages !== undefined
@@ -236,9 +221,10 @@ export default function ProductAdminPage() {
 
   useEffect(() => {
     const storedToken = localStorage.getItem("token")
-    const userFromStorage = parseStoredUser(localStorage.getItem("user"))
+    const userFromStorage = readStoredUser() as UserInfo | null
 
     if (!storedToken || !userFromStorage) {
+      clearAuthSession()
       router.push("/")
       return
     }
@@ -246,9 +232,8 @@ export default function ProductAdminPage() {
     setToken(storedToken)
     setUser(userFromStorage)
 
-    const hasAdminRole = userFromStorage.roles?.some((role) => ADMIN_ROLES.includes(role))
-    if (!hasAdminRole) {
-      router.push("/shop")
+    if (!hasAdminAccess(userFromStorage.roles)) {
+      router.push("/")
     }
   }, [router])
 
@@ -258,7 +243,7 @@ export default function ProductAdminPage() {
     setProductsError(null)
     try {
       const queryParams = buildQueryParams(appliedFilters, page, size)
-      const response = await fetch(`/api/products/all-product?${queryParams.toString()}`, {
+      const response = await fetch(`/api/products?${queryParams.toString()}`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -319,7 +304,7 @@ export default function ProductAdminPage() {
     }
 
     if (!isAdmin) {
-      setFormError("Only admin users can add products")
+      setFormError("Only authorized admin roles can manage products")
       return
     }
 
@@ -343,7 +328,7 @@ export default function ProductAdminPage() {
     const isEditing = Boolean(editingProduct?.id)
 
     try {
-      const endpoint = isEditing ? `/api/products/${editingProduct?.id}` : "/api/products/add-product"
+      const endpoint = isEditing ? `/api/admin/products/${editingProduct?.id}` : "/api/admin/products"
       const method = isEditing ? "PATCH" : "POST"
 
       const response = await fetch(endpoint, {
@@ -395,10 +380,7 @@ export default function ProductAdminPage() {
   }
 
   const handleLogout = () => {
-    localStorage.removeItem("token")
-    localStorage.removeItem("refreshToken")
-    localStorage.removeItem("tokenType")
-    localStorage.removeItem("user")
+    clearAuthSession()
     router.push("/")
   }
 
@@ -434,13 +416,11 @@ export default function ProductAdminPage() {
     setRowActionError(null)
     setRowActionLoadingId(product.id)
     try {
-      const response = await fetch(`/api/products/${product.id}/status`, {
+      const response = await fetch(`/api/admin/products/${product.id}/status?status=${encodeURIComponent(status)}`, {
         method: "PATCH",
         headers: {
-          "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ status }),
       })
       const json = await response.json()
       if (!response.ok) {
@@ -460,7 +440,7 @@ export default function ProductAdminPage() {
     setRowActionError(null)
     setRowActionLoadingId(product.id)
     try {
-      const response = await fetch(`/api/products/${product.id}`, {
+      const response = await fetch(`/api/admin/products/${product.id}`, {
         method: "DELETE",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -487,7 +467,7 @@ export default function ProductAdminPage() {
         {!isAdmin && (
           <Alert variant="destructive">
             <AlertCircle className="h-4 w-4" />
-            <AlertDescription>You do not have permission to manage products. Redirecting to shop...</AlertDescription>
+            <AlertDescription>You do not have permission to manage products. Redirecting to login...</AlertDescription>
           </Alert>
         )}
         <div className="grid gap-6 lg:grid-cols-[1.2fr_1fr]">
@@ -578,6 +558,9 @@ const AdminHeader = ({ isAdmin, displayName, onLogout }: AdminHeaderProps) => (
       </div>
       <div className="flex items-center gap-2">
         <div className="hidden text-sm text-muted-foreground sm:block">Signed in as {displayName}</div>
+        <Button variant="outline" size="sm" asChild>
+          <Link href="/admin/categories">Categories</Link>
+        </Button>
         <Button variant="outline" size="sm" asChild>
           <Link href="/shop">View shop</Link>
         </Button>
@@ -1119,7 +1102,7 @@ const InventoryOverviewCard = ({
           </Button>
         </div>
         <p className="text-xs text-muted-foreground">
-          Data is fetched directly from <code>/api/products/all-product</code> with your admin token.
+          Data is fetched through <code>/api/products</code> and admin mutations go through <code>/api/admin/products</code>.
         </p>
       </div>
       {!productsError && !productsLoading && products.length === 0 ? (

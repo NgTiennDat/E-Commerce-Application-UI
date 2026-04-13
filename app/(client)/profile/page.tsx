@@ -11,6 +11,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
+import { clearAuthSession } from "@/lib/client-auth"
 
 type UserProfile = {
   id: number | null
@@ -22,7 +23,7 @@ type UserProfile = {
   phoneNumber?: string
   address?: string
   avatarUrl?: string
-  enabled?: Boolean
+  enabled?: boolean
   roles?: string[]
   createdAt?: string
   updatedAt?: string
@@ -40,6 +41,7 @@ export default function ProfilePage() {
     const fetchProfile = async () => {
       const token = localStorage.getItem("token")
       if (!token) {
+        clearAuthSession()
         router.push("/")
         return
       }
@@ -84,10 +86,7 @@ export default function ProfilePage() {
   }, [router])
 
   const handleLogout = () => {
-    localStorage.removeItem("token")
-    localStorage.removeItem("refreshToken")
-    localStorage.removeItem("tokenType")
-    localStorage.removeItem("user")
+    clearAuthSession()
     router.push("/")
   }
 
@@ -154,7 +153,7 @@ export default function ProfilePage() {
 
         <CardFooter className="flex flex-col md:flex-row gap-3 md:items-center md:justify-between">
           <div className="text-sm text-muted-foreground">
-            Member since {profile?.createdAt ? new Date(profile.createdAt).toLocaleString() : "—"}
+            Member since {profile?.createdAt ? new Date(profile.createdAt).toLocaleString() : "N/A"}
           </div>
           <div className="flex gap-2">
             <Button variant="outline" asChild>

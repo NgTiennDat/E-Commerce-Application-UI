@@ -11,6 +11,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { ShoppingCart, LogOut, User, Star, CheckCircle2, Percent, PackageSearch, Search, SlidersHorizontal, Filter } from "lucide-react"
+import { hasAdminAccess } from "@/lib/auth-session"
+import { clearAuthSession, readStoredUser } from "@/lib/client-auth"
 
 interface UserData {
   id: number
@@ -97,14 +99,7 @@ export default function ShopPage() {
   const [page, setPage] = useState(0)
   const [size, setSize] = useState(12)
   const displayName = user?.name || user?.fullName || user?.username || "Customer"
-  const normalizedRoles = user?.roles?.map((role) => String(role).toUpperCase().replace(/^ROLE_/, "")) ?? []
-  const isAdmin =
-    normalizedRoles.includes("ADMIN") ||
-    normalizedRoles.includes("SELLER") ||
-    normalizedRoles.includes("STAFF_SUPPORT") ||
-    normalizedRoles.includes("INVENTORY_MANAGER") ||
-    normalizedRoles.includes("DELIVERY_MANAGER") ||
-    normalizedRoles.includes("PAYMENT_MANAGER")
+  const isAdmin = hasAdminAccess(user?.roles)
   const totalItems = meta.total !== undefined ? Number(meta.total) : products.length
   const totalPages =
     meta.pages !== undefined
@@ -115,21 +110,16 @@ export default function ShopPage() {
   const currentPage = meta.page !== undefined ? Number(meta.page) : page
 
   useEffect(() => {
-    // Check for valid token
     const token = localStorage.getItem("token")
-    const userData = localStorage.getItem("user")
+    const storedUser = readStoredUser()
 
-    if (!token || !userData) {
+    if (!token || !storedUser) {
+      clearAuthSession()
       router.push("/")
       return
     }
 
-    try {
-      setUser(JSON.parse(userData))
-    } catch {
-      router.push("/")
-      return
-    }
+    setUser(storedUser as UserData)
 
     const fetchProducts = async () => {
       setProductsLoading(true)
@@ -157,7 +147,7 @@ export default function ShopPage() {
 
         const query = queryParams.toString()
 
-        const response = await fetch(`/api/products/all-product?${query}`, {
+        const response = await fetch(`/api/products?${query}`, {
           headers: {
             Authorization: `Bearer ${token}`,
           },
@@ -185,8 +175,7 @@ export default function ShopPage() {
   }, [router, page, size, appliedFilters])
 
   const handleLogout = () => {
-    localStorage.removeItem("token")
-    localStorage.removeItem("user")
+    clearAuthSession()
     router.push("/")
   }
 
@@ -210,19 +199,17 @@ export default function ShopPage() {
 
   const fetchRelatedProducts = async (product: Product) => {
     const token = localStorage.getItem("token")
-    if (!token) {
-      setRelatedError("Missing auth token")
-      return
-    }
 
     setRelatedFor(product)
     setRelatedLoading(true)
     setRelatedError(null)
     try {
       const response = await fetch(`/api/products/${product.id}/related`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        headers: token
+          ? {
+              Authorization: `Bearer ${token}`,
+            }
+          : undefined,
         cache: "no-store",
       })
 

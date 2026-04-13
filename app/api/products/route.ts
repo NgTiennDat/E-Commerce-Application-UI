@@ -18,10 +18,6 @@ export async function GET(request: NextRequest) {
     const isFeatured = searchParams.get("isFeatured")
     const isNew = searchParams.get("isNew")
 
-    if (!authorization && !cookie) {
-      return NextResponse.json({ message: "Missing credentials" }, { status: 401 })
-    }
-
     const backendQuery = new URLSearchParams({ page, size })
 
     const appendIfPresent = (key: string, value: string | null) => {
@@ -38,7 +34,7 @@ export async function GET(request: NextRequest) {
     appendIfPresent("isFeatured", isFeatured)
     appendIfPresent("isNew", isNew)
 
-    const backendResponse = await fetch(`${PRODUCT_API_BASE}/products?${backendQuery}`, {
+    const backendResponse = await fetch(`${PRODUCT_API_BASE}/products?${backendQuery.toString()}`, {
       method: "GET",
       headers: {
         ...(authorization ? { Authorization: authorization } : {}),

@@ -11,6 +11,8 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Loader2, UserPlus, AlertCircle } from "lucide-react"
+import { hasAdminAccess } from "@/lib/auth-session"
+import { persistAuthSession } from "@/lib/client-auth"
 
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -66,10 +68,7 @@ export function RegisterForm() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          ...formData,
-          roleCode: "CUSTOMER",
-        }),
+        body: JSON.stringify(formData),
       })
 
       const data = await response.json()
@@ -79,12 +78,9 @@ export function RegisterForm() {
         return
       }
 
-      localStorage.setItem("token", data.token)
-      if (data.refreshToken) localStorage.setItem("refreshToken", data.refreshToken)
-      if (data.tokenType) localStorage.setItem("tokenType", data.tokenType)
-      localStorage.setItem("user", JSON.stringify(data.user))
+      const normalizedRoles = persistAuthSession(data)
 
-      router.push("/shop")
+      router.push(hasAdminAccess(normalizedRoles) ? "/admin/products" : "/shop")
     } catch (error) {
       setErrors({ general: "An error occurred. Please try again later." })
     } finally {
@@ -148,7 +144,7 @@ export function RegisterForm() {
                 type="password"
                 value={formData.password}
                 onChange={updateField("password")}
-                placeholder="••••••••"
+                placeholder="Enter your password"
                 className={errors.password ? "border-destructive" : ""}
                 disabled={isLoading}
               />
